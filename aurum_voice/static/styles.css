@@ -304,6 +304,15 @@ audio {
   pointer-events: none;
 }
 
+.intelligence-actions {
+  margin-top: 10px;
+  align-items: center;
+}
+
+.intel-status {
+  min-width: 220px;
+}
+
 @media (max-width: 940px) {
   .app-shell {
     width: min(1180px, calc(100% - 24px));

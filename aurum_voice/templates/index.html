@@ -136,6 +136,17 @@
             <input id="peakTarget" type="range" min="0.1" max="1" value="0.92" step="0.01" />
             <div class="value-row"><span>Headroom</span><strong id="peakTargetValue">0.92</strong></div>
           </div>
+
+          <hr class="divider" />
+          <h2 class="section-title">Live Intelligence</h2>
+          <label class="checkbox-row">
+            <input id="useIntelligence" type="checkbox" checked />
+            Use background wealth/tax intelligence for guidance metadata
+          </label>
+          <div class="actions intelligence-actions">
+            <button id="refreshIntelBtn" class="btn btn-secondary" type="button">Refresh Intelligence</button>
+            <span id="intelStatus" class="subtle">Checking status...</span>
+          </div>
         </article>
       </section>
 

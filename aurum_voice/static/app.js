@@ -35,10 +35,14 @@ const presetSelect = document.getElementById("presetSelect");
 const savePresetBtn = document.getElementById("savePresetBtn");
 const loadPresetBtn = document.getElementById("loadPresetBtn");
 const deletePresetBtn = document.getElementById("deletePresetBtn");
+const useIntelligence = document.getElementById("useIntelligence");
+const refreshIntelBtn = document.getElementById("refreshIntelBtn");
+const intelStatus = document.getElementById("intelStatus");
 
 let currentAudioUrl = null;
 let waveformAnimation = null;
 const PRESET_STORAGE_KEY = "aurumVoicePresets";
+let intelPollHandle = null;
 
 function setStatus(message, kind = "") {
   statusText.textContent = message;
@@ -74,6 +78,8 @@ function getSettings() {
       A: voiceA.value.trim(),
       B: voiceB.value.trim(),
     },
+    use_intelligence: Boolean(useIntelligence.checked),
+    apply_intelligence_context: false,
     mastering: {
       enabled: Boolean(masteringEnabled.checked),
       normalize: Boolean(normalizeEnabled.checked),
@@ -93,6 +99,7 @@ function applySettings(settings) {
   speakerBoost.checked = Boolean(settings.speaker_boost ?? true);
   voiceA.value = settings.voices?.A || "";
   voiceB.value = settings.voices?.B || "";
+  useIntelligence.checked = Boolean(settings.use_intelligence ?? true);
 
   masteringEnabled.checked = Boolean(settings.mastering?.enabled ?? true);
   normalizeEnabled.checked = Boolean(settings.mastering?.normalize ?? true);
@@ -179,6 +186,54 @@ function deletePreset() {
   writePresets(presets);
   refreshPresetSelect();
   setStatus(`Preset "${name}" deleted.`, "success");
+}
+
+function renderIntelStatus(payload) {
+  if (!payload) {
+    intelStatus.textContent = "Intelligence unavailable";
+    return;
+  }
+  const healthy = Boolean(payload.healthy);
+  const items = Number(payload.item_count || 0);
+  const revision = Number(payload.revision || 0);
+  const at = payload.generated_at ? ` @ ${payload.generated_at}` : "";
+  const mode = useIntelligence.checked ? "on" : "off";
+  intelStatus.textContent = healthy
+    ? `Live (${items} items, rev ${revision}, ${mode})${at}`
+    : `Warming up (${items} items, ${mode})${at}`;
+}
+
+async function pollIntelStatus() {
+  try {
+    const response = await fetch("/api/intelligence/status");
+    if (!response.ok) {
+      throw new Error("status failed");
+    }
+    const data = await response.json();
+    renderIntelStatus(data);
+  } catch {
+    intelStatus.textContent = "Intelligence status unavailable";
+  }
+}
+
+async function refreshIntelligence(force = true) {
+  try {
+    refreshIntelBtn.disabled = true;
+    intelStatus.textContent = "Refreshing intelligence...";
+    const response = await fetch("/api/intelligence/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ force }),
+    });
+    if (!response.ok) {
+      throw new Error("refresh failed");
+    }
+    await pollIntelStatus();
+  } catch {
+    intelStatus.textContent = "Refresh failed";
+  } finally {
+    refreshIntelBtn.disabled = false;
+  }
 }
 
 function drawIdleWaveform() {
@@ -333,6 +388,7 @@ insertTemplateBtn.addEventListener("click", insertTemplate);
 savePresetBtn.addEventListener("click", savePreset);
 loadPresetBtn.addEventListener("click", loadPreset);
 deletePresetBtn.addEventListener("click", deletePreset);
+refreshIntelBtn.addEventListener("click", () => refreshIntelligence(true));
 
 bindSlider(crossfade, crossfadeValue, " ms");
 bindSlider(stability, stabilityValue);
@@ -343,3 +399,8 @@ bindSlider(peakTarget, peakTargetValue);
 updateCount();
 refreshPresetSelect();
 drawIdleWaveform();
+pollIntelStatus();
+if (intelPollHandle) {
+  clearInterval(intelPollHandle);
+}
+intelPollHandle = setInterval(pollIntelStatus, 30000);

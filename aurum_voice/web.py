@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import re
+import threading
 from dataclasses import replace
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -10,6 +11,7 @@ from flask import Flask, jsonify, render_template, request
 
 from .audio_utils import crossfade_pcm16_mono, master_pcm16_mono, pcm16_mono_to_wav_bytes
 from .config import PipelineConfig
+from .intelligence import DomainIntelligenceService
 from .pipeline import VoiceSynthesisPipeline
 from .providers import ElevenLabsProvider, TTSProviderError
 
@@ -18,12 +20,20 @@ _SPEAKER_RE = re.compile(
 )
 
 
-def create_app() -> Flask:
+def create_app(
+    *,
+    intelligence_service: DomainIntelligenceService | None = None,
+    start_background_intelligence: bool = True,
+) -> Flask:
     app = Flask(
         __name__,
         template_folder=str(Path(__file__).with_name("templates")),
         static_folder=str(Path(__file__).with_name("static")),
     )
+    intelligence = intelligence_service or DomainIntelligenceService()
+    app.config["INTELLIGENCE_SERVICE"] = intelligence
+    if start_background_intelligence:
+        intelligence.start_background_refresh()
 
     @app.get("/")
     def index() -> str:
@@ -44,6 +54,8 @@ def create_app() -> Flask:
         quality = str(payload.get("quality", "balanced"))
         script_mode = str(payload.get("script_mode", "single")).strip().lower()
         voices = payload.get("voices", {}) if isinstance(payload.get("voices"), dict) else {}
+        use_intelligence = _as_bool(payload.get("use_intelligence", True))
+        apply_intelligence_context = _as_bool(payload.get("apply_intelligence_context", False))
 
         mastering = payload.get("mastering", {}) if isinstance(payload.get("mastering"), dict) else {}
         mastering_enabled = bool(mastering.get("enabled", True))
@@ -57,10 +69,13 @@ def create_app() -> Flask:
             "style": _clamp(style),
             "use_speaker_boost": speaker_boost,
         }
+        intelligence_context = intelligence.get_context_for_prompt() if use_intelligence else ""
+        should_apply_context = use_intelligence and apply_intelligence_context and script_mode != "multi"
+        enriched_text = _enrich_prompt_text(text, intelligence_context) if should_apply_context else text
 
         try:
             base_config = _resolve_quality_config(PipelineConfig.from_env(), quality)
-            segments = _extract_segments(text, script_mode)
+            segments = _extract_segments(enriched_text, script_mode)
             segment_audio: list[bytes] = []
             for speaker, segment_text in segments:
                 requested_voice = str(voices.get(speaker, "")).strip()
@@ -95,7 +110,44 @@ def create_app() -> Flask:
             return jsonify({"error": "Synthesis failed due to an unexpected error."}), 500
 
         audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
-        return jsonify({"audio_b64": audio_b64})
+        intelligence_state = intelligence.status()
+        return jsonify(
+            {
+                "audio_b64": audio_b64,
+                "intelligence": {
+                    "enabled": use_intelligence,
+                    "applied_to_audio": should_apply_context,
+                    "revision": intelligence_state.get("revision", 0),
+                    "keywords": intelligence_state.get("keywords", []),
+                },
+            }
+        )
+
+    @app.get("/api/intelligence/status")
+    def intelligence_status():
+        return jsonify(intelligence.status())
+
+    @app.post("/api/intelligence/refresh")
+    def intelligence_refresh():
+        force = _as_bool((request.get_json(silent=True) or {}).get("force", False))
+        threading.Thread(target=intelligence.refresh_now, kwargs={"force": force}, daemon=True).start()
+        return jsonify({"ok": True})
+
+    @app.post("/api/intelligence/enhance")
+    def intelligence_enhance():
+        payload = request.get_json(silent=True) or {}
+        text = str(payload.get("text", "")).strip()
+        if not text:
+            return jsonify({"error": "Text is required."}), 400
+        max_chars = int(payload.get("max_context_chars", 800))
+        enhanced = intelligence.enhance_prompt(text, max_chars=max_chars)
+        return jsonify(
+            {
+                "enhanced_text": enhanced,
+                "context": intelligence.get_context_for_prompt(max_chars=max_chars),
+                "status": intelligence.status(),
+            }
+        )
 
     @app.post("/api/synthesize/save")
     def synthesize_to_file():
@@ -150,6 +202,26 @@ def _extract_segments(text: str, script_mode: str) -> list[tuple[str, str]]:
         if segment_text:
             segments.append((speaker, segment_text))
     return segments or [("A", text)]
+
+
+def _enrich_prompt_text(text: str, context: str) -> str:
+    if not context.strip():
+        return text
+    return (
+        f"{text.strip()}\n\n"
+        "[Live domain intelligence context for accuracy and recency]\n"
+        f"{context.strip()}"
+    )
+
+
+def _as_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    if isinstance(value, (int, float)):
+        return value != 0
+    return bool(value)
 
 
 def _synthesize_segment_pcm(

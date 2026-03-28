@@ -15,6 +15,8 @@ Smooth AI voice software with ElevenLabs integration.
 - Project preset save/load/delete (stored in browser local storage)
 - Multi-voice A/B script mode with per-speaker voice ID overrides
 - One-click mastering (normalization + fade in/out smoothing)
+- Background intelligence fetch for wealth management + tax policy signals
+- Live intelligence status + manual refresh in UI
 
 ## Install
 
@@ -67,6 +69,27 @@ Includes:
 - preset system for saving creative direction configurations
 - multi-speaker script support using `A:` / `B:` lines
 - mastering controls for polished output in one pass
+- background intelligence status from IRS/SEC/Treasury feeds
+- optional use of intelligence context to improve guidance metadata while keeping audio rendering fast
+
+### Live intelligence layer
+
+Aurum runs a background intelligence refresher that pulls public regulatory/news signals from:
+
+- IRS Newsroom RSS
+- SEC Press Releases RSS
+- U.S. Treasury News feed
+
+What this does:
+
+- keeps a cached summary + keywords in memory
+- updates in the background on an interval
+- exposes status and refresh endpoints:
+  - `GET /api/intelligence/status`
+  - `POST /api/intelligence/refresh`
+  - `POST /api/intelligence/enhance`
+
+In the UI, enable **Use background wealth/tax intelligence** to attach this context as smart guidance metadata during generation requests.
 
 ### Multi-voice script format
 
