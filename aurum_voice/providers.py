@@ -18,6 +18,7 @@ class ElevenLabsProvider:
 
     config: PipelineConfig
     base_url: str = "https://api.elevenlabs.io"
+    voice_settings: dict[str, float | bool] | None = None
 
     def __post_init__(self) -> None:
         self._client = httpx.Client(timeout=self.config.request_timeout_seconds)
@@ -29,7 +30,8 @@ class ElevenLabsProvider:
         payload = {
             "text": text,
             "model_id": self.config.model_id,
-            "voice_settings": {
+            "voice_settings": self.voice_settings
+            or {
                 "stability": 0.5,
                 "similarity_boost": 0.75,
                 "style": 0.0,

@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aurum Voice Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <div class="bg-gradient"></div>
+    <main class="app-shell">
+      <header class="topbar card">
+        <div>
+          <p class="eyebrow">Aurum Labs</p>
+          <h1>Voice Studio</h1>
+        </div>
+        <div class="status-pill">Premium Synthesis Online</div>
+      </header>
+
+      <section class="grid">
+        <article class="card editor">
+          <label for="text" class="section-title">Script</label>
+          <textarea
+            id="text"
+            placeholder="Write your script here. Aurum will produce studio-grade voice output."
+          ></textarea>
+          <div class="editor-footer">
+            <span id="charCount">0 characters</span>
+            <div class="actions">
+              <button id="clearBtn" class="btn btn-secondary" type="button">Clear</button>
+              <button id="generateBtn" class="btn btn-primary" type="button">Generate Voice</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="card controls">
+          <h2 class="section-title">Voice Direction</h2>
+          <div class="control-block">
+            <label for="quality">Render Quality</label>
+            <select id="quality">
+              <option value="balanced" selected>Balanced</option>
+              <option value="expressive">Expressive</option>
+              <option value="fast">Fast Draft</option>
+            </select>
+          </div>
+
+          <div class="control-block">
+            <label for="crossfade">Smoothness / Crossfade (ms)</label>
+            <input id="crossfade" type="range" min="0" max="80" value="24" />
+            <div class="value-row"><span>Boundary blending</span><strong id="crossfadeValue">24 ms</strong></div>
+          </div>
+
+          <div class="control-block">
+            <label for="stability">Stability</label>
+            <input id="stability" type="range" min="0" max="1" value="0.50" step="0.01" />
+            <div class="value-row"><span>Consistency</span><strong id="stabilityValue">0.50</strong></div>
+          </div>
+
+          <div class="control-block">
+            <label for="similarity">Similarity Boost</label>
+            <input id="similarity" type="range" min="0" max="1" value="0.75" step="0.01" />
+            <div class="value-row"><span>Voice likeness</span><strong id="similarityValue">0.75</strong></div>
+          </div>
+
+          <div class="control-block">
+            <label for="style">Style</label>
+            <input id="style" type="range" min="0" max="1" value="0.00" step="0.01" />
+            <div class="value-row"><span>Expressiveness</span><strong id="styleValue">0.00</strong></div>
+          </div>
+
+          <label class="checkbox-row">
+            <input id="speakerBoost" type="checkbox" checked />
+            Enable speaker boost
+          </label>
+        </article>
+      </section>
+
+      <section class="card playback">
+        <div class="playback-top">
+          <h2 class="section-title">Playback</h2>
+          <span id="statusText" class="status-text">Ready</span>
+        </div>
+        <audio id="player" controls></audio>
+        <div class="actions">
+          <a id="downloadBtn" class="btn btn-secondary disabled" download="aurum_voice.wav">Download WAV</a>
+        </div>
+      </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>

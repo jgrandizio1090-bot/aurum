@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
   "httpx>=0.28.1",
+  "flask>=3.1.0",
 ]
 
 [project.optional-dependencies]
@@ -19,3 +20,4 @@ dev = [
 
 [project.scripts]
 aurum-voice = "aurum_voice.cli:main"
+aurum-voice-web = "aurum_voice.web:main"

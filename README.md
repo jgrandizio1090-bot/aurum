@@ -10,6 +10,7 @@ Smooth AI voice software with ElevenLabs integration.
 - In-memory chunk caching for repeated synthesis
 - Retry/backoff for transient network errors
 - CLI interface for generating `.wav` files
+- Premium web studio UI with modern controls and real-time playback
 
 ## Install
 
@@ -38,6 +39,26 @@ aurum-voice \
   --output ./out/voice.wav \
   --crossfade-ms 24
 ```
+
+## Web Studio (Luxury UI)
+
+Start the app:
+
+```bash
+aurum-voice-web
+```
+
+Then open:
+
+```text
+http://localhost:8080
+```
+
+Includes:
+
+- modern glassmorphism UI with premium color system
+- live controls for quality, smoothness, stability, similarity, and style
+- in-browser playback and WAV download
 
 ## Run tests
 
