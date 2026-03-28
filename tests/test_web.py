@@ -34,3 +34,14 @@ def test_intelligence_status_endpoint() -> None:
     assert "revision" in payload
     assert "item_count" in payload
     assert "topic_counts" in payload
+
+
+def test_intelligence_recommendations_endpoint() -> None:
+    intelligence = DomainIntelligenceService()
+    app = create_app(intelligence_service=intelligence, start_background_intelligence=False)
+    client = app.test_client()
+    response = client.get("/api/intelligence/recommendations")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert "plan" in payload
+    assert "priority_topics" in payload

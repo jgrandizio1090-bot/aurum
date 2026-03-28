@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Iterable
 from xml.etree import ElementTree as ET
@@ -124,6 +124,16 @@ class IntelligenceSnapshot:
     topic_counts: dict[str, int] = field(default_factory=dict)
 
 
+@dataclass(slots=True)
+class RecommendationPlan:
+    mode: str
+    summary: str
+    rationale: list[str] = field(default_factory=list)
+    settings_patch: dict[str, object] = field(default_factory=dict)
+    suggested_script_template: str = ""
+    priority_topics: list[str] = field(default_factory=list)
+
+
 class DomainIntelligenceService:
     """Continuously refreshes domain news and builds reusable prompt context."""
 
@@ -191,6 +201,7 @@ class DomainIntelligenceService:
 
     def status(self) -> dict[str, object]:
         snapshot = self.get_snapshot()
+        plan = self.recommend_workflow_plan()
         return {
             "generated_at": snapshot.generated_at,
             "revision": snapshot.revision,
@@ -198,6 +209,8 @@ class DomainIntelligenceService:
             "keywords": snapshot.keywords[:10],
             "source_status": snapshot.source_status,
             "topic_counts": snapshot.topic_counts,
+            "priority_topics": plan.priority_topics,
+            "recommended_mode": plan.mode,
             "refresh_interval_seconds": self.refresh_interval_seconds,
             "healthy": len(snapshot.items) > 0,
         }
@@ -255,6 +268,86 @@ class DomainIntelligenceService:
             "Keep guidance compliant, practical, and client-friendly:\n"
             f"{context}"
         )
+
+    def recommend_workflow_plan(self) -> RecommendationPlan:
+        snapshot = self.get_snapshot()
+        ranked_topics = sorted(snapshot.topic_counts.items(), key=lambda pair: (-pair[1], pair[0]))
+        priority_topics = [topic for topic, count in ranked_topics if count > 0][:3]
+        if not priority_topics:
+            priority_topics = [
+                "family_office_creation",
+                "governance",
+                "family_advisory",
+                "philanthropy",
+            ]
+
+        dominant = priority_topics[0]
+        if dominant in {"governance", "family_advisory"}:
+            mode = "dialogue_advisory"
+            template = (
+                "A: Let's establish your family governance goals for this year.\n"
+                "B: We need clearer decision rights and succession cadence.\n"
+                "A: Great. We'll define a governance roadmap, then align advisory education steps."
+            )
+            summary = "Recommended dialogue mode for nuanced governance/advisory communication."
+        elif dominant == "philanthropy":
+            mode = "narrative_briefing"
+            template = (
+                "A: This briefing outlines philanthropic strategy priorities.\n"
+                "A: We align mission, grantmaking cadence, and measurable impact goals.\n"
+                "A: Next, we map governance and tax-aware execution steps."
+            )
+            summary = "Recommended narrative mode for mission-driven philanthropy briefings."
+        else:
+            mode = "structured_overview"
+            template = (
+                "A: We are launching a modern family office operating model.\n"
+                "A: First, define legal and governance foundations.\n"
+                "A: Then align advisory services, risk controls, and family mission outcomes."
+            )
+            summary = "Recommended structured mode for family office design and implementation."
+
+        settings_patch: dict[str, object] = {
+            "script_mode": "multi" if mode == "dialogue_advisory" else "single",
+            "quality": "expressive" if mode != "structured_overview" else "balanced",
+            "crossfade_ms": 28 if mode == "dialogue_advisory" else 24,
+            "stability": 0.58 if mode == "dialogue_advisory" else 0.64,
+            "similarity_boost": 0.78,
+            "style": 0.22 if mode in {"dialogue_advisory", "narrative_briefing"} else 0.16,
+            "speaker_boost": True,
+            "use_intelligence": True,
+            "apply_intelligence_context": False,
+            "mastering": {
+                "enabled": True,
+                "normalize": True,
+                "fade_ms": 14,
+                "peak_target": 0.91,
+            },
+        }
+        rationale = [
+            f"Dominant intelligence topic: {_topic_label(dominant)}",
+            "Selected settings favor clarity and professionalism for advisor-client communication.",
+            "Mastering defaults keep output polished while preserving intelligibility.",
+        ]
+        return RecommendationPlan(
+            mode=mode,
+            summary=summary,
+            rationale=rationale,
+            settings_patch=settings_patch,
+            suggested_script_template=template,
+            priority_topics=priority_topics,
+        )
+
+    def recommendations_payload(self) -> dict[str, object]:
+        snapshot = self.get_snapshot()
+        plan = self.recommend_workflow_plan()
+        return {
+            "generated_at": snapshot.generated_at,
+            "revision": snapshot.revision,
+            "topic_counts": snapshot.topic_counts,
+            "priority_topics": plan.priority_topics,
+            "plan": asdict(plan),
+        }
 
     def _run(self) -> None:
         self.refresh_now(force=True)

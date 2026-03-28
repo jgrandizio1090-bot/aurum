@@ -56,12 +56,38 @@ def create_app(
         voices = payload.get("voices", {}) if isinstance(payload.get("voices"), dict) else {}
         use_intelligence = _as_bool(payload.get("use_intelligence", True))
         apply_intelligence_context = _as_bool(payload.get("apply_intelligence_context", False))
+        apply_ai_recommendations = _as_bool(payload.get("apply_ai_recommendations", False))
 
         mastering = payload.get("mastering", {}) if isinstance(payload.get("mastering"), dict) else {}
         mastering_enabled = bool(mastering.get("enabled", True))
         normalize_enabled = bool(mastering.get("normalize", True))
         fade_ms = int(mastering.get("fade_ms", 12))
         peak_target = float(mastering.get("peak_target", 0.92))
+
+        recommendations = intelligence.recommendations_payload() if use_intelligence else {}
+        settings_patch = (
+            recommendations.get("plan", {}).get("settings_patch", {})
+            if isinstance(recommendations, dict)
+            else {}
+        )
+        if apply_ai_recommendations and isinstance(settings_patch, dict):
+            quality = str(settings_patch.get("quality", quality))
+            script_mode = str(settings_patch.get("script_mode", script_mode))
+            crossfade_ms = int(settings_patch.get("crossfade_ms", crossfade_ms))
+            stability = float(settings_patch.get("stability", stability))
+            similarity_boost = float(settings_patch.get("similarity_boost", similarity_boost))
+            style = float(settings_patch.get("style", style))
+            speaker_boost = _as_bool(settings_patch.get("speaker_boost", speaker_boost))
+            use_intelligence = _as_bool(settings_patch.get("use_intelligence", use_intelligence))
+            apply_intelligence_context = _as_bool(
+                settings_patch.get("apply_intelligence_context", apply_intelligence_context)
+            )
+            patched_mastering = settings_patch.get("mastering", {})
+            if isinstance(patched_mastering, dict):
+                mastering_enabled = _as_bool(patched_mastering.get("enabled", mastering_enabled))
+                normalize_enabled = _as_bool(patched_mastering.get("normalize", normalize_enabled))
+                fade_ms = int(patched_mastering.get("fade_ms", fade_ms))
+                peak_target = float(patched_mastering.get("peak_target", peak_target))
 
         voice_settings = {
             "stability": _clamp(stability),
@@ -117,9 +143,11 @@ def create_app(
                 "intelligence": {
                     "enabled": use_intelligence,
                     "applied_to_audio": should_apply_context,
+                    "applied_ai_recommendations": apply_ai_recommendations,
                     "revision": intelligence_state.get("revision", 0),
                     "keywords": intelligence_state.get("keywords", []),
                 },
+                "recommendations": recommendations,
             }
         )
 
@@ -148,6 +176,10 @@ def create_app(
                 "status": intelligence.status(),
             }
         )
+
+    @app.get("/api/intelligence/recommendations")
+    def intelligence_recommendations():
+        return jsonify(intelligence.recommendations_payload())
 
     @app.post("/api/synthesize/save")
     def synthesize_to_file():

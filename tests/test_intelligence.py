@@ -56,3 +56,11 @@ def test_classify_topics_detects_family_office_and_philanthropy() -> None:
     assert counts["family_office_creation"] >= 1
     assert counts["governance"] >= 1
     assert counts["philanthropy"] >= 1
+
+
+def test_recommendation_payload_contains_plan() -> None:
+    intelligence = DomainIntelligenceService()
+    payload = intelligence.recommendations_payload()
+    assert "plan" in payload
+    assert "settings_patch" in payload["plan"]
+    assert "priority_topics" in payload

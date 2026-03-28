@@ -313,6 +313,11 @@ audio {
   min-width: 220px;
 }
 
+#aiTopics {
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
 @media (max-width: 940px) {
   .app-shell {
     width: min(1180px, calc(100% - 24px));

@@ -68,6 +68,20 @@
 
         <article class="card controls">
           <h2 class="section-title">Voice Direction</h2>
+          <div class="ai-strategy card mini-card">
+            <div class="playback-top">
+              <h3 class="section-title">AI Strategy</h3>
+              <span id="strategyMode" class="subtle">Loading...</span>
+            </div>
+            <p id="strategySummary" class="subtle">
+              The platform is learning from backend intelligence and preparing recommendations.
+            </p>
+            <div class="actions">
+              <button id="applyStrategyBtn" class="btn btn-secondary" type="button">Apply AI Settings</button>
+              <button id="insertStrategyTemplateBtn" class="btn btn-secondary" type="button">Insert AI Script</button>
+            </div>
+          </div>
+
           <div class="control-block">
             <label for="voiceA">Voice ID (Speaker A)</label>
             <input id="voiceA" type="text" placeholder="Optional override for speaker A" />
@@ -147,6 +161,21 @@
             <button id="refreshIntelBtn" class="btn btn-secondary" type="button">Refresh Intelligence</button>
             <span id="intelStatus" class="subtle">Checking status...</span>
           </div>
+
+          <hr class="divider" />
+          <h2 class="section-title">AI Strategy</h2>
+          <p id="aiPlanSummary" class="subtle">
+            Loading AI workflow recommendations...
+          </p>
+          <div class="actions intelligence-actions">
+            <button id="applyAiPlanBtn" class="btn btn-secondary" type="button">Apply AI Settings</button>
+            <button id="insertAiTemplateBtn" class="btn btn-secondary" type="button">Insert AI Template</button>
+          </div>
+          <label class="checkbox-row">
+            <input id="applyAiRecommendationsOnGenerate" type="checkbox" />
+            Auto-apply AI recommendations on generate
+          </label>
+          <div id="aiTopics" class="subtle intel-status"></div>
         </article>
       </section>
 

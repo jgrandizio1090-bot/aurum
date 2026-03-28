@@ -38,11 +38,17 @@ const deletePresetBtn = document.getElementById("deletePresetBtn");
 const useIntelligence = document.getElementById("useIntelligence");
 const refreshIntelBtn = document.getElementById("refreshIntelBtn");
 const intelStatus = document.getElementById("intelStatus");
+const applyAiPlanBtn = document.getElementById("applyAiPlanBtn");
+const insertAiTemplateBtn = document.getElementById("insertAiTemplateBtn");
+const applyAiRecommendationsOnGenerate = document.getElementById("applyAiRecommendationsOnGenerate");
+const aiPlanSummary = document.getElementById("aiPlanSummary");
+const aiTopics = document.getElementById("aiTopics");
 
 let currentAudioUrl = null;
 let waveformAnimation = null;
 const PRESET_STORAGE_KEY = "aurumVoicePresets";
 let intelPollHandle = null;
+let latestRecommendations = null;
 
 function setStatus(message, kind = "") {
   statusText.textContent = message;
@@ -80,6 +86,7 @@ function getSettings() {
     },
     use_intelligence: Boolean(useIntelligence.checked),
     apply_intelligence_context: false,
+    apply_ai_recommendations: Boolean(applyAiRecommendationsOnGenerate.checked),
     mastering: {
       enabled: Boolean(masteringEnabled.checked),
       normalize: Boolean(normalizeEnabled.checked),
@@ -97,8 +104,10 @@ function applySettings(settings) {
   similarity.value = String(settings.similarity_boost ?? 0.75);
   style.value = String(settings.style ?? 0.0);
   speakerBoost.checked = Boolean(settings.speaker_boost ?? true);
-  voiceA.value = settings.voices?.A || "";
-  voiceB.value = settings.voices?.B || "";
+  if (settings.voices && typeof settings.voices === "object") {
+    voiceA.value = settings.voices.A || "";
+    voiceB.value = settings.voices.B || "";
+  }
   useIntelligence.checked = Boolean(settings.use_intelligence ?? true);
 
   masteringEnabled.checked = Boolean(settings.mastering?.enabled ?? true);
@@ -203,6 +212,20 @@ function renderIntelStatus(payload) {
     : `Warming up (${items} items, ${mode})${at}`;
 }
 
+function renderAiRecommendations(payload) {
+  if (!payload || !payload.plan) {
+    aiPlanSummary.textContent = "AI strategy unavailable.";
+    aiTopics.textContent = "";
+    return;
+  }
+  latestRecommendations = payload;
+  aiPlanSummary.textContent = payload.plan.summary || "AI strategy ready.";
+  const topics = Array.isArray(payload.priority_topics) ? payload.priority_topics : [];
+  aiTopics.textContent = topics.length
+    ? `Priority topics: ${topics.join(", ")}`
+    : "Priority topics: none detected yet";
+}
+
 async function pollIntelStatus() {
   try {
     const response = await fetch("/api/intelligence/status");
@@ -213,6 +236,20 @@ async function pollIntelStatus() {
     renderIntelStatus(data);
   } catch {
     intelStatus.textContent = "Intelligence status unavailable";
+  }
+}
+
+async function fetchAiRecommendations() {
+  try {
+    const response = await fetch("/api/intelligence/recommendations");
+    if (!response.ok) {
+      throw new Error("recommendations failed");
+    }
+    const data = await response.json();
+    renderAiRecommendations(data);
+  } catch {
+    aiPlanSummary.textContent = "AI strategy unavailable.";
+    aiTopics.textContent = "";
   }
 }
 
@@ -228,12 +265,38 @@ async function refreshIntelligence(force = true) {
     if (!response.ok) {
       throw new Error("refresh failed");
     }
-    await pollIntelStatus();
+    await Promise.all([pollIntelStatus(), fetchAiRecommendations()]);
   } catch {
     intelStatus.textContent = "Refresh failed";
   } finally {
     refreshIntelBtn.disabled = false;
   }
+}
+
+function applyAiSettings() {
+  const patch = latestRecommendations?.plan?.settings_patch;
+  if (!patch || typeof patch !== "object") {
+    setStatus("AI settings are not ready yet.", "error");
+    return;
+  }
+  applySettings(patch);
+  applyAiRecommendationsOnGenerate.checked = true;
+  setStatus("AI settings applied.", "success");
+}
+
+function insertAiTemplate() {
+  const template = latestRecommendations?.plan?.suggested_script_template;
+  if (!template) {
+    setStatus("AI template is not ready yet.", "error");
+    return;
+  }
+  textEl.value = template;
+  const mode = latestRecommendations?.plan?.settings_patch?.script_mode;
+  if (typeof mode === "string" && mode) {
+    scriptMode.value = mode;
+  }
+  updateCount();
+  setStatus("AI template inserted.", "success");
 }
 
 function drawIdleWaveform() {
@@ -389,6 +452,8 @@ savePresetBtn.addEventListener("click", savePreset);
 loadPresetBtn.addEventListener("click", loadPreset);
 deletePresetBtn.addEventListener("click", deletePreset);
 refreshIntelBtn.addEventListener("click", () => refreshIntelligence(true));
+applyAiPlanBtn.addEventListener("click", applyAiSettings);
+insertAiTemplateBtn.addEventListener("click", insertAiTemplate);
 
 bindSlider(crossfade, crossfadeValue, " ms");
 bindSlider(stability, stabilityValue);
@@ -400,7 +465,11 @@ updateCount();
 refreshPresetSelect();
 drawIdleWaveform();
 pollIntelStatus();
+fetchAiRecommendations();
 if (intelPollHandle) {
   clearInterval(intelPollHandle);
 }
-intelPollHandle = setInterval(pollIntelStatus, 30000);
+intelPollHandle = setInterval(() => {
+  pollIntelStatus();
+  fetchAiRecommendations();
+}, 30000);

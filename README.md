@@ -72,6 +72,7 @@ Includes:
 - background intelligence status from IRS/SEC/Treasury feeds
 - optional use of intelligence context to improve guidance metadata while keeping audio rendering fast
 - topic-tracked background refinement for family office creation, governance, family advisory, and philanthropy
+- AI strategy engine that recommends workflow mode, settings patches, and script templates from live intelligence
 
 ### Live intelligence layer
 
@@ -92,12 +93,18 @@ What this does:
   - governance
   - family advisory
   - philanthropy
+- produces AI recommendations for platform robustness:
+  - recommended workflow mode (dialogue/narrative/structured)
+  - one-click settings patch for voice and mastering controls
+  - topic-aware script template suggestion
 - exposes status and refresh endpoints:
   - `GET /api/intelligence/status`
   - `POST /api/intelligence/refresh`
   - `POST /api/intelligence/enhance`
+  - `GET /api/intelligence/recommendations`
 
 In the UI, enable **Use background wealth/tax intelligence** to attach this context as smart guidance metadata during generation requests.
+You can also use the **AI Strategy** panel to apply recommended settings, insert templates, or auto-apply recommendations on generate.
 
 ### Multi-voice script format
 
