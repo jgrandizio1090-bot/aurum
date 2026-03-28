@@ -136,6 +136,20 @@ def create_app(
             return jsonify({"error": "Synthesis failed due to an unexpected error."}), 500
 
         audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
+        if apply_ai_recommendations and isinstance(recommendations, dict):
+            intelligence.record_feedback(
+                event_type="auto_apply_recommendations",
+                accepted=True,
+                topics=[
+                    topic
+                    for topic in recommendations.get("priority_topics", [])
+                    if isinstance(topic, str)
+                ],
+                metadata={
+                    "script_mode": script_mode,
+                    "quality": quality,
+                },
+            )
         intelligence_state = intelligence.status()
         return jsonify(
             {
@@ -180,6 +194,31 @@ def create_app(
     @app.get("/api/intelligence/recommendations")
     def intelligence_recommendations():
         return jsonify(intelligence.recommendations_payload())
+
+    @app.post("/api/intelligence/feedback")
+    def intelligence_feedback():
+        payload = request.get_json(silent=True) or {}
+        event_type = str(payload.get("event_type", "")).strip()
+        if not event_type:
+            return jsonify({"error": "event_type is required."}), 400
+        accepted = _as_bool(payload.get("accepted", True))
+        topics_raw = payload.get("topics", [])
+        topics = [topic for topic in topics_raw if isinstance(topic, str)] if isinstance(topics_raw, list) else []
+        metadata = payload.get("metadata", {})
+        metadata = metadata if isinstance(metadata, dict) else {}
+        feedback = intelligence.record_feedback(
+            event_type=event_type,
+            accepted=accepted,
+            topics=topics,
+            metadata=metadata,
+        )
+        return jsonify(
+            {
+                "ok": True,
+                "feedback": feedback,
+                "recommendations": intelligence.recommendations_payload(),
+            }
+        )
 
     @app.post("/api/synthesize/save")
     def synthesize_to_file():

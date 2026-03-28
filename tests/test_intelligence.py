@@ -64,3 +64,20 @@ def test_recommendation_payload_contains_plan() -> None:
     assert "plan" in payload
     assert "settings_patch" in payload["plan"]
     assert "priority_topics" in payload
+
+
+def test_feedback_updates_acceptance_summary(tmp_path) -> None:
+    feedback_path = tmp_path / "feedback.json"
+    intelligence = DomainIntelligenceService(feedback_path=feedback_path)
+    summary_before = intelligence.feedback_summary()
+    assert summary_before["total_events"] == 0
+
+    summary_after = intelligence.record_feedback(
+        event_type="apply_ai_settings",
+        accepted=True,
+        topics=["governance"],
+        metadata={"mode": "dialogue_advisory"},
+    )
+    assert summary_after["total_events"] == 1
+    assert summary_after["topic_acceptance"]["governance"]["accepted"] >= 1
+    assert feedback_path.exists()

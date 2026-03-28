@@ -45,3 +45,22 @@ def test_intelligence_recommendations_endpoint() -> None:
     payload = response.get_json()
     assert "plan" in payload
     assert "priority_topics" in payload
+
+
+def test_intelligence_feedback_endpoint(tmp_path) -> None:
+    intelligence = DomainIntelligenceService(feedback_path=tmp_path / "feedback_web.json")
+    app = create_app(intelligence_service=intelligence, start_background_intelligence=False)
+    client = app.test_client()
+    response = client.post(
+        "/api/intelligence/feedback",
+        json={
+            "event_type": "apply_ai_settings",
+            "accepted": True,
+            "topics": ["governance"],
+            "metadata": {"mode": "dialogue_advisory"},
+        },
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["feedback"]["total_events"] >= 1

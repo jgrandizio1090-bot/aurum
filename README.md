@@ -97,11 +97,14 @@ What this does:
   - recommended workflow mode (dialogue/narrative/structured)
   - one-click settings patch for voice and mastering controls
   - topic-aware script template suggestion
+- captures closed-loop feedback events from user actions (apply settings, insert template, auto-apply generation)
+- persistently re-weights topic priorities by acceptance history to improve future recommendation quality
 - exposes status and refresh endpoints:
   - `GET /api/intelligence/status`
   - `POST /api/intelligence/refresh`
   - `POST /api/intelligence/enhance`
   - `GET /api/intelligence/recommendations`
+  - `POST /api/intelligence/feedback`
 
 In the UI, enable **Use background wealth/tax intelligence** to attach this context as smart guidance metadata during generation requests.
 You can also use the **AI Strategy** panel to apply recommended settings, insert templates, or auto-apply recommendations on generate.

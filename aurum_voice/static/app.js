@@ -50,6 +50,41 @@ const PRESET_STORAGE_KEY = "aurumVoicePresets";
 let intelPollHandle = null;
 let latestRecommendations = null;
 
+async function submitFeedback(eventType, accepted = true, metadata = {}) {
+  const rawTopics = Array.isArray(metadata?.feedback_topics)
+    ? metadata.feedback_topics
+    : Array.isArray(latestRecommendations?.priority_topics)
+      ? latestRecommendations.priority_topics
+      : [];
+  const topics = rawTopics.filter((topic) => typeof topic === "string");
+  const finalMetadata = { ...metadata };
+  delete finalMetadata.feedback_topics;
+  try {
+    await fetch("/api/intelligence/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event_type: eventType,
+        accepted,
+        topics,
+        metadata: finalMetadata,
+      }),
+    });
+  } catch {
+    // Feedback capture should never block UX.
+  }
+}
+
+function topicLabel(topic) {
+  const labels = {
+    family_office_creation: "Family Office Creation",
+    governance: "Governance",
+    family_advisory: "Family Advisory",
+    philanthropy: "Philanthropy",
+  };
+  return labels[topic] || topic;
+}
+
 function setStatus(message, kind = "") {
   statusText.textContent = message;
   statusText.classList.remove("error", "success");
@@ -222,7 +257,7 @@ function renderAiRecommendations(payload) {
   aiPlanSummary.textContent = payload.plan.summary || "AI strategy ready.";
   const topics = Array.isArray(payload.priority_topics) ? payload.priority_topics : [];
   aiTopics.textContent = topics.length
-    ? `Priority topics: ${topics.join(", ")}`
+    ? `Priority topics: ${topics.map(topicLabel).join(", ")}`
     : "Priority topics: none detected yet";
 }
 
@@ -266,6 +301,7 @@ async function refreshIntelligence(force = true) {
       throw new Error("refresh failed");
     }
     await Promise.all([pollIntelStatus(), fetchAiRecommendations()]);
+    void submitFeedback("manual_refresh", true, {});
   } catch {
     intelStatus.textContent = "Refresh failed";
   } finally {
@@ -281,6 +317,9 @@ function applyAiSettings() {
   }
   applySettings(patch);
   applyAiRecommendationsOnGenerate.checked = true;
+  void submitFeedback("apply_ai_settings", true, {
+    mode: latestRecommendations?.plan?.mode || "",
+  });
   setStatus("AI settings applied.", "success");
 }
 
@@ -296,6 +335,9 @@ function insertAiTemplate() {
     scriptMode.value = mode;
   }
   updateCount();
+  void submitFeedback("insert_ai_template", true, {
+    mode: latestRecommendations?.plan?.mode || "",
+  });
   setStatus("AI template inserted.", "success");
 }
 
@@ -378,13 +420,14 @@ async function generateVoice() {
   generateBtn.disabled = true;
   setStatus("Rendering premium voice...", "");
 
+  const settings = getSettings();
   try {
     const response = await fetch("/api/synthesize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         text,
-        ...getSettings(),
+        ...settings,
       }),
     });
 
@@ -411,6 +454,15 @@ async function generateVoice() {
     player.src = currentAudioUrl;
     downloadBtn.href = currentAudioUrl;
     downloadBtn.classList.remove("disabled");
+    if (settings.apply_ai_recommendations) {
+      const feedbackTopics = Array.isArray(data?.recommendations?.priority_topics)
+        ? data.recommendations.priority_topics
+        : [];
+      void submitFeedback("auto_apply_recommendations", true, {
+        mode: data?.recommendations?.plan?.mode || latestRecommendations?.plan?.mode || "",
+        feedback_topics: feedbackTopics,
+      });
+    }
     setStatus("Voice ready. Enjoy.", "success");
   } catch (error) {
     setStatus(error.message || "Unexpected error while generating audio.", "error");

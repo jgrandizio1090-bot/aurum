@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import re
 import threading
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Iterable
+from pathlib import Path
+from typing import Any, Iterable
 from xml.etree import ElementTree as ET
 
 import httpx
@@ -144,6 +146,7 @@ class DomainIntelligenceService:
         request_timeout_seconds: float = 10.0,
         max_items: int = 18,
         sources: tuple[tuple[str, str], ...] = DEFAULT_SOURCES,
+        feedback_path: str | Path | None = None,
     ) -> None:
         self.refresh_interval_seconds = max(60, refresh_interval_seconds)
         self.max_items = max(3, max_items)
@@ -155,6 +158,8 @@ class DomainIntelligenceService:
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._last_refresh_monotonic = 0.0
+        self._feedback_path = Path(feedback_path) if feedback_path else Path("/tmp/aurum_intelligence_feedback.json")
+        self._feedback: dict[str, Any] = self._load_feedback()
         self._snapshot = IntelligenceSnapshot(
             generated_at=_utc_now_iso(),
             revision=0,
@@ -211,6 +216,7 @@ class DomainIntelligenceService:
             "topic_counts": snapshot.topic_counts,
             "priority_topics": plan.priority_topics,
             "recommended_mode": plan.mode,
+            "feedback": self.feedback_summary(),
             "refresh_interval_seconds": self.refresh_interval_seconds,
             "healthy": len(snapshot.items) > 0,
         }
@@ -271,15 +277,17 @@ class DomainIntelligenceService:
 
     def recommend_workflow_plan(self) -> RecommendationPlan:
         snapshot = self.get_snapshot()
-        ranked_topics = sorted(snapshot.topic_counts.items(), key=lambda pair: (-pair[1], pair[0]))
-        priority_topics = [topic for topic, count in ranked_topics if count > 0][:3]
+        topic_counts = snapshot.topic_counts or {topic: 0 for topic in _TOPIC_KEYWORDS}
+        scored_topics = sorted(
+            (
+                (topic, self._topic_priority_score(topic, count))
+                for topic, count in topic_counts.items()
+            ),
+            key=lambda pair: (-pair[1], pair[0]),
+        )
+        priority_topics = [topic for topic, _score in scored_topics[:3]]
         if not priority_topics:
-            priority_topics = [
-                "family_office_creation",
-                "governance",
-                "family_advisory",
-                "philanthropy",
-            ]
+            priority_topics = ["family_office_creation", "governance", "family_advisory"]
 
         dominant = priority_topics[0]
         if dominant in {"governance", "family_advisory"}:
@@ -329,6 +337,11 @@ class DomainIntelligenceService:
             "Selected settings favor clarity and professionalism for advisor-client communication.",
             "Mastering defaults keep output polished while preserving intelligibility.",
         ]
+        feedback = self.feedback_summary()
+        if feedback["total_events"] > 0:
+            rationale.append(
+                f"Learned from {feedback['total_events']} user feedback events to prioritize higher-acceptance topics."
+            )
         return RecommendationPlan(
             mode=mode,
             summary=summary,
@@ -347,6 +360,69 @@ class DomainIntelligenceService:
             "topic_counts": snapshot.topic_counts,
             "priority_topics": plan.priority_topics,
             "plan": asdict(plan),
+            "feedback": self.feedback_summary(),
+        }
+
+    def record_feedback(
+        self,
+        *,
+        event_type: str,
+        accepted: bool = True,
+        topics: list[str] | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        normalized_event = (event_type or "unknown").strip().lower() or "unknown"
+        normalized_topics = [topic for topic in (topics or []) if topic in _TOPIC_KEYWORDS]
+        with self._lock:
+            self._feedback["total_events"] = int(self._feedback.get("total_events", 0)) + 1
+            event_counts = self._feedback.setdefault("event_counts", {})
+            event_counts[normalized_event] = int(event_counts.get(normalized_event, 0)) + 1
+            topic_feedback = self._feedback.setdefault("topic_acceptance", {})
+            for topic in normalized_topics:
+                bucket = topic_feedback.setdefault(topic, {"accepted": 0, "rejected": 0})
+                key = "accepted" if accepted else "rejected"
+                bucket[key] = int(bucket.get(key, 0)) + 1
+            # Keep a lightweight rolling trace for diagnostics.
+            recent = self._feedback.setdefault("recent_events", [])
+            recent.append(
+                {
+                    "at": _utc_now_iso(),
+                    "event_type": normalized_event,
+                    "accepted": bool(accepted),
+                    "topics": normalized_topics,
+                    "metadata": metadata or {},
+                }
+            )
+            self._feedback["recent_events"] = recent[-40:]
+            self._persist_feedback_locked()
+        return self.feedback_summary()
+
+    def feedback_summary(self) -> dict[str, object]:
+        with self._lock:
+            total_events = int(self._feedback.get("total_events", 0))
+            event_counts = {
+                key: int(value) for key, value in dict(self._feedback.get("event_counts", {})).items()
+            }
+            topic_acceptance: dict[str, dict[str, int]] = {}
+            for topic in _TOPIC_KEYWORDS:
+                bucket = dict(self._feedback.get("topic_acceptance", {}).get(topic, {}))
+                topic_acceptance[topic] = {
+                    "accepted": int(bucket.get("accepted", 0)),
+                    "rejected": int(bucket.get("rejected", 0)),
+                }
+
+        acceptance_rate_by_topic: dict[str, float] = {}
+        for topic, bucket in topic_acceptance.items():
+            total = bucket["accepted"] + bucket["rejected"]
+            acceptance_rate_by_topic[topic] = (
+                round(bucket["accepted"] / total, 3) if total > 0 else 0.0
+            )
+
+        return {
+            "total_events": total_events,
+            "event_counts": event_counts,
+            "topic_acceptance": topic_acceptance,
+            "acceptance_rate_by_topic": acceptance_rate_by_topic,
         }
 
     def _run(self) -> None:
@@ -381,6 +457,67 @@ class DomainIntelligenceService:
                 source_status=source_status,
                 topic_counts=topic_counts,
             )
+
+    def _topic_priority_score(self, topic: str, signal_count: int) -> float:
+        base = float(signal_count)
+        bucket = self._feedback.get("topic_acceptance", {}).get(topic, {})
+        accepted = int(bucket.get("accepted", 0))
+        rejected = int(bucket.get("rejected", 0))
+        total = accepted + rejected
+        if total <= 0:
+            return base
+        acceptance_delta = (accepted / total) - 0.5
+        confidence = min(1.0, total / 8.0)
+        return base + (acceptance_delta * confidence * 4.0)
+
+    def _load_feedback(self) -> dict[str, Any]:
+        try:
+            if self._feedback_path.exists():
+                raw = json.loads(self._feedback_path.read_text(encoding="utf-8"))
+                if isinstance(raw, dict):
+                    return self._normalize_feedback(raw)
+        except Exception:
+            pass
+        return self._default_feedback()
+
+    def _persist_feedback_locked(self) -> None:
+        try:
+            self._feedback_path.parent.mkdir(parents=True, exist_ok=True)
+            self._feedback_path.write_text(
+                json.dumps(self._feedback, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+        except Exception:
+            # Never let persistence failures break the core app flow.
+            return
+
+    def _default_feedback(self) -> dict[str, Any]:
+        return {
+            "total_events": 0,
+            "event_counts": {},
+            "topic_acceptance": {topic: {"accepted": 0, "rejected": 0} for topic in _TOPIC_KEYWORDS},
+            "recent_events": [],
+        }
+
+    def _normalize_feedback(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = self._default_feedback()
+        normalized["total_events"] = int(payload.get("total_events", 0))
+        event_counts = payload.get("event_counts", {})
+        if isinstance(event_counts, dict):
+            normalized["event_counts"] = {str(k): int(v) for k, v in event_counts.items()}
+        topic_acceptance = payload.get("topic_acceptance", {})
+        if isinstance(topic_acceptance, dict):
+            for topic in _TOPIC_KEYWORDS:
+                bucket = topic_acceptance.get(topic, {})
+                if isinstance(bucket, dict):
+                    normalized["topic_acceptance"][topic] = {
+                        "accepted": int(bucket.get("accepted", 0)),
+                        "rejected": int(bucket.get("rejected", 0)),
+                    }
+        recent_events = payload.get("recent_events", [])
+        if isinstance(recent_events, list):
+            normalized["recent_events"] = recent_events[-40:]
+        return normalized
 
 
 def _dedupe_items(items: Iterable[IntelligenceItem]) -> list[IntelligenceItem]:
