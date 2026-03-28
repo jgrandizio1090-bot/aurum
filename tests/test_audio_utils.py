@@ -1,6 +1,11 @@
 from array import array
 
-from aurum_voice.audio_utils import crossfade_pcm16_mono, pcm16_mono_to_wav_bytes
+from aurum_voice.audio_utils import (
+    crossfade_pcm16_mono,
+    master_pcm16_mono,
+    normalize_pcm16_mono,
+    pcm16_mono_to_wav_bytes,
+)
 
 
 def _samples_to_pcm(samples: list[int]) -> bytes:
@@ -26,3 +31,26 @@ def test_pcm_to_wav_wraps_header() -> None:
     wav_bytes = pcm16_mono_to_wav_bytes(pcm, sample_rate=44_100)
     assert wav_bytes[:4] == b"RIFF"
     assert b"WAVE" in wav_bytes[:16]
+
+
+def test_normalize_raises_peak_level() -> None:
+    pcm = _samples_to_pcm([1000, -1000, 500, -500])
+    normalized = normalize_pcm16_mono(pcm, peak_target=0.9)
+    samples = array("h")
+    samples.frombytes(normalized)
+    assert max(abs(v) for v in samples) > 1000
+
+
+def test_mastering_applies_fade() -> None:
+    pcm = _samples_to_pcm([12000] * 400)
+    mastered = master_pcm16_mono(
+        pcm,
+        sample_rate=1000,
+        normalize=False,
+        fade_ms=20,
+        peak_target=0.9,
+    )
+    samples = array("h")
+    samples.frombytes(mastered)
+    assert samples[0] == 0
+    assert samples[-1] == 0

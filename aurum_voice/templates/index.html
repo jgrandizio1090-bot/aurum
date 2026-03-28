@@ -23,13 +23,40 @@
         <div class="status-pill">Premium Synthesis Online</div>
       </header>
 
+      <section class="card presets">
+        <div class="preset-row">
+          <div>
+            <h2 class="section-title">Project Presets</h2>
+            <p class="subtle">Save voice direction stacks and reload them instantly.</p>
+          </div>
+          <div class="preset-controls">
+            <input id="presetName" type="text" placeholder="Preset name" />
+            <button id="savePresetBtn" class="btn btn-secondary" type="button">Save</button>
+            <select id="presetSelect"></select>
+            <button id="loadPresetBtn" class="btn btn-secondary" type="button">Load</button>
+            <button id="deletePresetBtn" class="btn btn-secondary" type="button">Delete</button>
+          </div>
+        </div>
+      </section>
+
       <section class="grid">
         <article class="card editor">
           <label for="text" class="section-title">Script</label>
+          <div class="script-mode">
+            <label for="scriptMode">Script Mode</label>
+            <select id="scriptMode">
+              <option value="single" selected>Single Voice</option>
+              <option value="multi">Multi Voice (A/B)</option>
+            </select>
+            <button id="insertTemplateBtn" class="btn btn-secondary" type="button">Insert A/B Template</button>
+          </div>
           <textarea
             id="text"
-            placeholder="Write your script here. Aurum will produce studio-grade voice output."
+            placeholder="Write your script here. Use `A:` and `B:` labels in multi-voice mode."
           ></textarea>
+          <p class="subtle script-help">
+            Multi mode format example: <code>A: Welcome to Aurum.</code> then <code>B: Thanks for having me.</code>
+          </p>
           <div class="editor-footer">
             <span id="charCount">0 characters</span>
             <div class="actions">
@@ -41,6 +68,16 @@
 
         <article class="card controls">
           <h2 class="section-title">Voice Direction</h2>
+          <div class="control-block">
+            <label for="voiceA">Voice ID (Speaker A)</label>
+            <input id="voiceA" type="text" placeholder="Optional override for speaker A" />
+          </div>
+
+          <div class="control-block">
+            <label for="voiceB">Voice ID (Speaker B)</label>
+            <input id="voiceB" type="text" placeholder="Optional override for speaker B" />
+          </div>
+
           <div class="control-block">
             <label for="quality">Render Quality</label>
             <select id="quality">
@@ -78,6 +115,27 @@
             <input id="speakerBoost" type="checkbox" checked />
             Enable speaker boost
           </label>
+
+          <hr class="divider" />
+          <h2 class="section-title">One-Click Mastering</h2>
+          <label class="checkbox-row">
+            <input id="masteringEnabled" type="checkbox" checked />
+            Enable mastering
+          </label>
+          <label class="checkbox-row">
+            <input id="normalizeEnabled" type="checkbox" checked />
+            Normalize loudness
+          </label>
+          <div class="control-block">
+            <label for="fadeMs">Fade In/Out (ms)</label>
+            <input id="fadeMs" type="range" min="0" max="60" value="12" />
+            <div class="value-row"><span>Click reduction</span><strong id="fadeMsValue">12 ms</strong></div>
+          </div>
+          <div class="control-block">
+            <label for="peakTarget">Target Peak</label>
+            <input id="peakTarget" type="range" min="0.1" max="1" value="0.92" step="0.01" />
+            <div class="value-row"><span>Headroom</span><strong id="peakTargetValue">0.92</strong></div>
+          </div>
         </article>
       </section>
 
@@ -86,6 +144,7 @@
           <h2 class="section-title">Playback</h2>
           <span id="statusText" class="status-text">Ready</span>
         </div>
+        <canvas id="waveform" width="1100" height="140" aria-label="Waveform visualizer"></canvas>
         <audio id="player" controls></audio>
         <div class="actions">
           <a id="downloadBtn" class="btn btn-secondary disabled" download="aurum_voice.wav">Download WAV</a>

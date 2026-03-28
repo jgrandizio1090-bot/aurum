@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import math
 import wave
 from array import array
 
@@ -55,3 +56,60 @@ def pcm16_mono_to_wav_bytes(pcm_audio: bytes, sample_rate: int = 44_100) -> byte
             wav_file.setframerate(sample_rate)
             wav_file.writeframes(clean)
         return stream.getvalue()
+
+
+def normalize_pcm16_mono(pcm_audio: bytes, peak_target: float = 0.92) -> bytes:
+    """Apply simple peak normalization with headroom."""
+    clean = ensure_even_length(pcm_audio)
+    if not clean:
+        return clean
+    samples = array("h")
+    samples.frombytes(clean)
+    peak = max(abs(sample) for sample in samples) or 0
+    if peak == 0:
+        return clean
+
+    target_peak = int(32767 * max(0.1, min(1.0, peak_target)))
+    gain = target_peak / peak
+    if math.isclose(gain, 1.0, rel_tol=1e-6):
+        return clean
+
+    out = array("h")
+    out.extend(max(-32768, min(32767, int(sample * gain))) for sample in samples)
+    return out.tobytes()
+
+
+def apply_fade_in_out_pcm16_mono(pcm_audio: bytes, fade_ms: int, sample_rate: int = 44_100) -> bytes:
+    """Apply linear fade in/out to reduce start/end clicks."""
+    clean = ensure_even_length(pcm_audio)
+    if not clean or fade_ms <= 0:
+        return clean
+
+    samples = array("h")
+    samples.frombytes(clean)
+    fade_samples = min((fade_ms * sample_rate) // 1000, len(samples) // 2)
+    if fade_samples <= 0:
+        return clean
+
+    for i in range(fade_samples):
+        ratio = i / fade_samples
+        samples[i] = int(samples[i] * ratio)
+        tail_idx = len(samples) - 1 - i
+        samples[tail_idx] = int(samples[tail_idx] * ratio)
+    return samples.tobytes()
+
+
+def master_pcm16_mono(
+    pcm_audio: bytes,
+    *,
+    sample_rate: int = 44_100,
+    normalize: bool = True,
+    fade_ms: int = 12,
+    peak_target: float = 0.92,
+) -> bytes:
+    """One-click mastering: optional normalization plus fade smoothing."""
+    output = ensure_even_length(pcm_audio)
+    if normalize:
+        output = normalize_pcm16_mono(output, peak_target=peak_target)
+    output = apply_fade_in_out_pcm16_mono(output, fade_ms=fade_ms, sample_rate=sample_rate)
+    return output

@@ -11,6 +11,10 @@ Smooth AI voice software with ElevenLabs integration.
 - Retry/backoff for transient network errors
 - CLI interface for generating `.wav` files
 - Premium web studio UI with modern controls and real-time playback
+- Animated waveform visualizer during playback previews
+- Project preset save/load/delete (stored in browser local storage)
+- Multi-voice A/B script mode with per-speaker voice ID overrides
+- One-click mastering (normalization + fade in/out smoothing)
 
 ## Install
 
@@ -59,6 +63,22 @@ Includes:
 - modern glassmorphism UI with premium color system
 - live controls for quality, smoothness, stability, similarity, and style
 - in-browser playback and WAV download
+- waveform animation for visual feedback
+- preset system for saving creative direction configurations
+- multi-speaker script support using `A:` / `B:` lines
+- mastering controls for polished output in one pass
+
+### Multi-voice script format
+
+When **Script Mode** is set to `Multi Voice (A/B)`, use lines like:
+
+```text
+A: Welcome to Aurum Voice Studio.
+B: Thanks. This sounds polished and premium.
+A: Let's begin today's narration.
+```
+
+You can optionally set distinct `Voice ID (Speaker A)` and `Voice ID (Speaker B)` in the UI.
 
 ## Run tests
 
