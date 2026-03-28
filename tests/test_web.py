@@ -33,3 +33,4 @@ def test_intelligence_status_endpoint() -> None:
     payload = response.get_json()
     assert "revision" in payload
     assert "item_count" in payload
+    assert "topic_counts" in payload

@@ -71,6 +71,7 @@ Includes:
 - mastering controls for polished output in one pass
 - background intelligence status from IRS/SEC/Treasury feeds
 - optional use of intelligence context to improve guidance metadata while keeping audio rendering fast
+- topic-tracked background refinement for family office creation, governance, family advisory, and philanthropy
 
 ### Live intelligence layer
 
@@ -79,11 +80,18 @@ Aurum runs a background intelligence refresher that pulls public regulatory/news
 - IRS Newsroom RSS
 - SEC Press Releases RSS
 - U.S. Treasury News feed
+- DOJ Press Releases feed
+- Federal Reserve Press Releases feed
 
 What this does:
 
 - keeps a cached summary + keywords in memory
 - updates in the background on an interval
+- classifies topic coverage counts for:
+  - family office creation
+  - governance
+  - family advisory
+  - philanthropy
 - exposes status and refresh endpoints:
   - `GET /api/intelligence/status`
   - `POST /api/intelligence/refresh`

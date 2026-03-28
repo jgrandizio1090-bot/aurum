@@ -54,10 +54,54 @@ _STOPWORDS = {
     "would",
 }
 
+_TOPIC_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "family_office_creation": (
+        "family office",
+        "single family office",
+        "multi family office",
+        "operating model",
+        "launch",
+        "formation",
+        "setup",
+    ),
+    "governance": (
+        "governance",
+        "family constitution",
+        "family council",
+        "board",
+        "fiduciary",
+        "oversight",
+        "succession",
+        "decision rights",
+    ),
+    "family_advisory": (
+        "family advisory",
+        "next generation",
+        "education",
+        "advisor",
+        "communication",
+        "conflict",
+        "values",
+        "stewardship",
+    ),
+    "philanthropy": (
+        "philanthropy",
+        "charitable",
+        "foundation",
+        "donor-advised",
+        "impact investing",
+        "grantmaking",
+        "giving",
+        "nonprofit",
+    ),
+}
+
 DEFAULT_SOURCES: tuple[tuple[str, str], ...] = (
     ("IRS Newsroom", "https://www.irs.gov/newsroom/rss"),
     ("SEC Press Releases", "https://www.sec.gov/news/pressreleases.rss"),
     ("U.S. Treasury News", "https://home.treasury.gov/news/press-releases/feed"),
+    ("DOJ Press Releases", "https://www.justice.gov/feeds/press-release.xml"),
+    ("Federal Reserve Press Releases", "https://www.federalreserve.gov/feeds/press_all.xml"),
 )
 
 
@@ -77,6 +121,7 @@ class IntelligenceSnapshot:
     items: list[IntelligenceItem] = field(default_factory=list)
     keywords: list[str] = field(default_factory=list)
     source_status: dict[str, str] = field(default_factory=dict)
+    topic_counts: dict[str, int] = field(default_factory=dict)
 
 
 class DomainIntelligenceService:
@@ -106,6 +151,7 @@ class DomainIntelligenceService:
             items=[],
             keywords=[],
             source_status={},
+            topic_counts={},
         )
 
     def start_background_refresh(self) -> None:
@@ -140,6 +186,7 @@ class DomainIntelligenceService:
                 items=list(self._snapshot.items),
                 keywords=list(self._snapshot.keywords),
                 source_status=dict(self._snapshot.source_status),
+                topic_counts=dict(self._snapshot.topic_counts),
             )
 
     def status(self) -> dict[str, object]:
@@ -150,6 +197,7 @@ class DomainIntelligenceService:
             "item_count": len(snapshot.items),
             "keywords": snapshot.keywords[:10],
             "source_status": snapshot.source_status,
+            "topic_counts": snapshot.topic_counts,
             "refresh_interval_seconds": self.refresh_interval_seconds,
             "healthy": len(snapshot.items) > 0,
         }
@@ -166,6 +214,16 @@ class DomainIntelligenceService:
         lines: list[str] = []
         if snapshot.keywords:
             lines.append("Priority signals: " + ", ".join(snapshot.keywords[:8]))
+        if snapshot.topic_counts:
+            ranked_topics = sorted(
+                snapshot.topic_counts.items(),
+                key=lambda pair: (-pair[1], pair[0]),
+            )
+            topic_line = ", ".join(
+                f"{_topic_label(topic)} ({count})" for topic, count in ranked_topics if count > 0
+            )
+            if topic_line:
+                lines.append("Topic coverage: " + topic_line)
         for item in snapshot.items[:6]:
             bullet = f"- {item.title}"
             if item.published:
@@ -219,6 +277,7 @@ class DomainIntelligenceService:
 
         deduped = _dedupe_items(all_items)[: self.max_items]
         keywords = _extract_keywords(deduped)
+        topic_counts = _classify_topics(deduped)
 
         with self._lock:
             self._snapshot = IntelligenceSnapshot(
@@ -227,6 +286,7 @@ class DomainIntelligenceService:
                 items=deduped,
                 keywords=keywords,
                 source_status=source_status,
+                topic_counts=topic_counts,
             )
 
 
@@ -317,6 +377,26 @@ def _extract_keywords(items: list[IntelligenceItem], *, max_keywords: int = 12) 
 
     ranked = sorted(counts.items(), key=lambda pair: (-pair[1], pair[0]))
     return [word for word, _ in ranked[:max_keywords]]
+
+
+def _classify_topics(items: list[IntelligenceItem]) -> dict[str, int]:
+    counts = {topic: 0 for topic in _TOPIC_KEYWORDS}
+    for item in items:
+        text = f"{item.title} {item.summary}".lower()
+        for topic, patterns in _TOPIC_KEYWORDS.items():
+            if any(pattern in text for pattern in patterns):
+                counts[topic] += 1
+    return counts
+
+
+def _topic_label(topic: str) -> str:
+    mapping = {
+        "family_office_creation": "Family Office Creation",
+        "governance": "Governance",
+        "family_advisory": "Family Advisory",
+        "philanthropy": "Philanthropy",
+    }
+    return mapping.get(topic, topic)
 
 
 def _utc_now_iso() -> str:
