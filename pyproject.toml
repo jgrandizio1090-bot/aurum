@@ -21,3 +21,6 @@ dev = [
 [project.scripts]
 aurum-voice = "aurum_voice.cli:main"
 aurum-voice-web = "aurum_voice.web:main"
+
+[tool.setuptools.packages.find]
+include = ["aurum_voice*"]
