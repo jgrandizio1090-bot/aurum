@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aurum-voice"
+version = "0.1.0"
+description = "Smooth voice synthesis pipeline with ElevenLabs integration."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "httpx>=0.28.1",
+  "flask>=3.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.5",
+]
+
+[project.scripts]
+aurum-voice = "aurum_voice.cli:main"
+aurum-voice-web = "aurum_voice.web:main"
