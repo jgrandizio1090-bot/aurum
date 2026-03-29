@@ -1,5 +1,18 @@
 # aurum
 
+## Vercel deployment
+
+This repository deploys on Vercel using a Python serverless entrypoint at `api/index.py`.
+
+Required project settings:
+
+- Root Directory: `.`
+- Build Command: *(leave empty)*
+- Output Directory: *(leave empty)*
+
+If production is still failing, confirm Vercel is connected to the branch that contains
+`api/index.py`, `vercel.json`, and `requirements.txt`.
+
 Smooth AI voice software with ElevenLabs integration.
 
 ## Features
